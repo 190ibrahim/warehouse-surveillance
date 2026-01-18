@@ -50,6 +50,32 @@ The system runs in a closed loop.
 
 ---
 
+## Setup and Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/190ibrahim/warehouse-surveillance.git
+   cd warehouse-surveillance
+   ```
+
+2. **Create virtual environment**
+   ```bash
+   python -m venv myenv
+   source myenv/bin/activate  # On Windows: myenv\Scripts\activate
+   ```
+
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+5. **Run the system**
+   ```bash
+   python main.py
+   ```
+
+---
+
 ## Experimental plan and research principles
 
 Our initial approach is to conduct tests in controlled environments, noting planned scenarios with several people with occlusions, people having an ID (ArUco), people without IDs, and people entering and leaving the field of view. Evaluation will focus on stability of multi-object tracking, correct association of authorization status, intruder detection accuracy using standard computer vision metrics, and camera centering performance over time.

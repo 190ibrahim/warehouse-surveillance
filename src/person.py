@@ -1,4 +1,3 @@
-import cv2
 import numpy as np
 
 class Person:
@@ -7,5 +6,8 @@ class Person:
         self.track_id = track_id
         self.authorized = False
         self.marker_id = None
-
-
+        self.confidence = 0.0
+        self.center = self._calculate_center()
+        self.age = 0  # How long this person has been tracked
+        self.last_seen_frame = 0
+   
