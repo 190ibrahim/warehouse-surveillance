@@ -42,7 +42,7 @@ class PerceptionNode:
         self.roi_x_margin = float(rospy.get_param("~roi_x_margin", 0.15))
         self.aruco_roi_min_dim = int(rospy.get_param("~aruco_roi_min_dim", 160))
         self.aruco_roi_max_scale = float(rospy.get_param("~aruco_roi_max_scale", 3.0))
-        self.aruco_max_tracks = int(rospy.get_param("~aruco_max_tracks", 8))
+        self.aruco_max_tracks = int(rospy.get_param("~aruco_max_tracks", 5))
         self.aruco_min_bbox_px = int(rospy.get_param("~aruco_min_bbox_px", 30))
         self.aruco_roi_fallback_full = bool(rospy.get_param("~aruco_roi_fallback_full", True))
         self.aruco_hold_time = float(rospy.get_param("~aruco_hold_time", 0.4))
@@ -69,6 +69,8 @@ class PerceptionNode:
         self.aruco_corner_refine_min_accuracy = float(
             rospy.get_param("~aruco_corner_refine_min_accuracy", 0.1)
         )
+        self.sticky_marker_auth = bool(rospy.get_param("~sticky_marker_auth", True))
+        self.track_auth_hold_time = float(rospy.get_param("~track_auth_hold_time", 0.0))
 
         if not os.path.isfile(self.weights):
             rospy.logerr("YOLO weights not found: %s", self.weights)
@@ -113,6 +115,9 @@ class PerceptionNode:
         self.processing = False
         self.last_process_time = rospy.Time(0)
         self.last_marker_by_track = {}
+        # Keep auth memory across frames to reduce flicker.
+        self.authorized_marker_ids = set()
+        self.authorized_tracks = {}
 
         self.image_sub = rospy.Subscriber(
             "image", Image, self.image_callback, queue_size=1, buff_size=2**24
@@ -139,11 +144,13 @@ class PerceptionNode:
         scale = 1.0
         max_dim = max(roi.shape[0], roi.shape[1])
         if max_dim > 0 and max_dim < self.aruco_roi_min_dim:
+            # Upscale small ROIs so the marker has enough pixels.
             scale = min(self.aruco_roi_min_dim / float(max_dim), self.aruco_roi_max_scale)
             roi = cv2.resize(roi, None, fx=scale, fy=scale, interpolation=cv2.INTER_LINEAR)
 
         gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
         if self.aruco_blur_ksize and self.aruco_blur_ksize > 0:
+            # Light blur can reduce noise in textures.
             k = self.aruco_blur_ksize
             if k % 2 == 0:
                 k += 1
@@ -170,6 +177,7 @@ class PerceptionNode:
 
         now = rospy.Time.now()
         if self.max_fps > 0:
+            # Skip frames to cap CPU use.
             min_dt = 1.0 / self.max_fps
             if (now - self.last_process_time).to_sec() < min_dt:
                 return
@@ -276,6 +284,7 @@ class PerceptionNode:
                         if w < self.aruco_min_bbox_px or h < self.aruco_min_bbox_px:
                             continue
 
+                        # Use a chest ROI to avoid walls and legs.
                         if self.aruco_use_roi:
                             roi_x1 = x1 + self.roi_x_margin * w
                             roi_x2 = x2 - self.roi_x_margin * w
@@ -293,6 +302,7 @@ class PerceptionNode:
 
                         marker_id = self._detect_marker_in_rect(frame, rx1, ry1, rx2, ry2)
                         if marker_id == -1 and self.aruco_use_roi and self.aruco_roi_fallback_full:
+                            # Fall back to full body if ROI fails.
                             rx1 = max(0, int(x1))
                             ry1 = max(0, int(y1))
                             rx2 = min(img_w, int(x2))
@@ -300,6 +310,7 @@ class PerceptionNode:
                             marker_id = self._detect_marker_in_rect(frame, rx1, ry1, rx2, ry2)
 
                         if marker_id == -1 and self.aruco_hold_time > 0.0:
+                            # Reuse last marker for a short gap.
                             last = self.last_marker_by_track.get(info["id"])
                             if last is not None:
                                 last_id, last_time = last
@@ -308,12 +319,43 @@ class PerceptionNode:
 
                         info["marker_id"] = marker_id
                         if marker_id != -1:
+                            # Decide if this marker is allowed or already trusted.
                             if not self.authorized_ids:
-                                info["authorized"] = True
+                                marker_authorized = True
+                            elif marker_id in self.authorized_ids:
+                                marker_authorized = True
+                            elif self.sticky_marker_auth and marker_id in self.authorized_marker_ids:
+                                marker_authorized = True
                             else:
-                                info["authorized"] = marker_id in self.authorized_ids
+                                marker_authorized = False
+
+                            if marker_authorized:
+                                info["authorized"] = True
+                                if self.sticky_marker_auth:
+                                    self.authorized_marker_ids.add(marker_id)
+                                if info["id"] >= 0:
+                                    self.authorized_tracks[info["id"]] = now
+
                             aruco_ids.append(marker_id)
-                            self.last_marker_by_track[info["id"]] = (marker_id, now)
+                            if info["id"] >= 0:
+                                self.last_marker_by_track[info["id"]] = (marker_id, now)
+
+            if track_info and self.authorized_tracks:
+                # Keep track authorization alive for a short time.
+                if self.track_auth_hold_time <= 0.0:
+                    for info in track_info:
+                        if info["id"] in self.authorized_tracks:
+                            info["authorized"] = True
+                else:
+                    cutoff = now - rospy.Duration(self.track_auth_hold_time)
+                    self.authorized_tracks = {
+                        key: value
+                        for key, value in self.authorized_tracks.items()
+                        if value >= cutoff
+                    }
+                    for info in track_info:
+                        if info["id"] in self.authorized_tracks:
+                            info["authorized"] = True
 
             for info in track_info:
                 person_status_msg.data.extend(

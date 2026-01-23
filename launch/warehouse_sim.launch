@@ -28,6 +28,7 @@
 
   <!-- controller node -->
   <node pkg="warehouse_surveillance" type="controller_node.py" name="controller" output="screen">
+    <rosparam file="$(find warehouse_surveillance)/config/controller.yaml" command="load"/>
     <remap from="cmd_vel" to="/cmd_vel_mux/input/navi"/>
     <remap from="camera_info" to="/zed/zed_node/rgb_raw/camera_info"/>
   </node>

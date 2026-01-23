@@ -1,11 +1,13 @@
+# YOLO + ByteTrack
 tracker: bytetrack.yaml
-conf: 0.4
+conf: 0.35
 iou: 0.5
-imgsz: 640
+imgsz: 960
 device: ""
-max_fps: 10.0
+max_fps: 30.0
 publish_debug: true
 
+# ArUco detection
 aruco_enabled: true
 aruco_dictionary: "DICT_4X4_50"
 authorized_ids: [7]
@@ -13,7 +15,11 @@ aruco_use_roi: true
 roi_y_min_ratio: 0.25
 roi_y_max_ratio: 0.6
 roi_x_margin: 0.15
-aruco_roi_min_dim: 160
-aruco_roi_max_scale: 3.0
+aruco_roi_min_dim: 200
+aruco_roi_max_scale: 1.2
+aruco_max_tracks: 20
 aruco_roi_fallback_full: true
 aruco_hold_time: 0.4
+# Authorization memory
+sticky_marker_auth: true
+track_auth_hold_time: 10.0

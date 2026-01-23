@@ -1,0 +1,19 @@
+# Motion tuning
+angular_kp: 1.2
+max_angular: 0.3
+linear_speed: 0.08
+max_linear: 0.15
+deadband: 0.05
+smooth_alpha: 0.6
+control_rate: 10.0
+
+# Target selection
+prefer_intruder: true
+move_on_intruder_only: true
+tracks_timeout: 0.5
+status_timeout: 0.5
+target_timeout: 0.5
+stop_on_no_target: true
+
+# Stop moving forward once the intruder fills this fraction of the image.
+approach_area_ratio: 0.06
