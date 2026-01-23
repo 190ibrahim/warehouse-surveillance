@@ -1,0 +1,34 @@
+<launch>
+  <param name="use_sim_time" value="true"/>
+
+  <!-- Use custom ArUco human model without touching upstream packages -->
+  <env name="GAZEBO_MODEL_PATH" value="$(find warehouse_surveillance)/models:$(optenv GAZEBO_MODEL_PATH)"/>
+  <param name="/spawn_pedsim_agents/actor_model_file" value="$(find warehouse_surveillance)/models/actor_model_aruco.sdf"/>
+
+  <!-- Start pedsim + turtlebot2 Gazebo -->
+  <include file="$(find pedsim_simulator)/launch/robot.launch">
+    <arg name="scene_file" value="$(find warehouse_surveillance)/scenarios/eng_hall.xml"/>
+    <arg name="world_name" value="$(find warehouse_surveillance)/worlds/eng_hall.world"/>
+    <arg name="pose_initial_x" value="20.0"/>
+    <arg name="pose_initial_y" value="20.0"/>
+    <arg name="pose_initial_theta" value="180.0"/>
+  </include>
+
+  <!-- Optional RViz view -->
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find warehouse_surveillance)/rviz/navigation.rviz"/>
+
+  <!-- perception node -->
+  <node pkg="warehouse_surveillance" type="perception_node.py" name="perception" output="screen">
+    <rosparam file="$(find warehouse_surveillance)/config/perception.yaml" command="load"/>
+    <!-- Remap to the real camera topic in sim -->
+    <param name="weights" value="$(find warehouse_surveillance)/yolo/yolov8n.pt"/>
+    <remap from="image" to="/zed/zed_node/rgb_raw/image_raw_color"/>
+    <remap from="camera_info" to="/zed/zed_node/rgb_raw/camera_info"/>
+  </node>
+
+  <!-- controller node -->
+  <node pkg="warehouse_surveillance" type="controller_node.py" name="controller" output="screen">
+    <remap from="cmd_vel" to="/cmd_vel_mux/input/navi"/>
+    <remap from="camera_info" to="/zed/zed_node/rgb_raw/camera_info"/>
+  </node>
+</launch>
